@@ -41,14 +41,14 @@ app = FastAPI(
     openapi_url="/openapi.json"
 )
 
-# 設定 CORS 中介軟體
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=settings.cors_allow_credentials,
-    allow_methods=settings.cors_allow_methods,
-    allow_headers=settings.cors_allow_headers,
-)
+# 設定 CORS 中介軟體（如需要跨域存取時啟用）
+# app.add_middleware(
+#     CORSMiddleware,
+#     allow_origins=settings.cors_origins,
+#     allow_credentials=settings.cors_allow_credentials,
+#     allow_methods=settings.cors_allow_methods,
+#     allow_headers=settings.cors_allow_headers,
+# )
 
 # 註冊例外處理器
 app.add_exception_handler(YouTubeTranscriptError, youtube_transcript_exception_handler)

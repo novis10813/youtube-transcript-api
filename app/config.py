@@ -5,6 +5,7 @@
 
 from pydantic_settings import BaseSettings
 from typing import List
+import os
 
 
 class Settings(BaseSettings):
@@ -23,15 +24,22 @@ class Settings(BaseSettings):
     api_prefix: str = "/api/v1"
     debug: bool = False
     
-    # CORS 設定
-    cors_origins: List[str] = ["http://localhost", "http://localhost:3000", "http://localhost:8080"]
-    cors_allow_credentials: bool = True
-    cors_allow_methods: List[str] = ["GET", "POST"]
-    cors_allow_headers: List[str] = ["*"]
+    # CORS 設定（如需要跨域存取時啟用）
+    # cors_origins: List[str] = ["http://localhost", "http://localhost:3000", "http://localhost:8080"]
+    # cors_allow_credentials: bool = True
+    # cors_allow_methods: List[str] = ["GET", "POST"]
+    # cors_allow_headers: List[str] = ["*"]
     
     # YouTube Transcript API 設定
     default_language: str = "zh-Hant"  # 繁體中文
-    fallback_languages: List[str] = ["zh-Hans", "zh", "en"]  # 備用語言：簡體中文、中文、英文
+    
+    @property
+    def fallback_languages(self) -> List[str]:
+        """獲取備用語言列表，支援環境變數覆蓋"""
+        fallback_env = os.getenv('FALLBACK_LANGUAGES')
+        if fallback_env:
+            return [lang.strip() for lang in fallback_env.split(',') if lang.strip()]
+        return ["zh-Hans", "zh", "en"]  # 預設值
     
     class Config:
         env_file = ".env"
