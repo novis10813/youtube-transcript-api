@@ -28,11 +28,44 @@ uv sync --no-dev
 ## 使用方法
 
 ```bash
-# 啟動 API 服務
-uv run uvicorn app.main:app --reload
+# 方法 1: 使用內建啟動腳本（推薦，會使用 config.py 中的設定）
+uv run python -m app.main
 
-# 或者激活虛擬環境後執行
-uv run fastapi run app/main.py --reload
+# 方法 2: 直接使用 uvicorn（手動指定參數）
+uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+# 方法 3: 使用 FastAPI CLI
+uv run fastapi run app/main.py --host 0.0.0.0 --port 8000
+
+# 開發模式（啟用自動重載）
+uv run python -m app.main  # debug=True 時會自動啟用 reload
+```
+
+### 環境變數配置
+
+您可以透過環境變數來覆蓋預設設定：
+
+```bash
+# 設定自訂主機和端口
+export HOST=127.0.0.1
+export PORT=7999
+export DEBUG=true
+
+# 啟動服務
+uv run python -m app.main
+```
+
+或者創建 `.env` 檔案：
+
+```bash
+# 複製範例環境檔案
+cp docker.env.example .env
+
+# 編輯環境變數
+nano .env
+
+# 啟動服務
+uv run python -m app.main
 ```
 
 ## API 端點
@@ -93,16 +126,18 @@ YTtranscript/
 
 ### 🚀 基本端點
 
+> **注意**：以下範例使用預設端口 8000。如果您使用了不同的端口（如 7999），請相應調整 URL。
+
 #### 1. 系統資訊
 ```bash
 # 獲取 API 基本資訊
-curl -X GET "http://localhost:7999/"
+curl -X GET "http://localhost:8000/"
 
 # 健康檢查
-curl -X GET "http://localhost:7999/health"
+curl -X GET "http://localhost:8000/health"
 
 # 版本資訊
-curl -X GET "http://localhost:7999/version"
+curl -X GET "http://localhost:8000/version"
 ```
 
 ### 📝 字幕 API 端點
@@ -110,12 +145,12 @@ curl -X GET "http://localhost:7999/version"
 #### 1. 獲取完整字幕 (JSON 格式)
 ```bash
 # 基本使用
-curl -X POST "http://localhost:7999/api/v1/transcript/" \
+curl -X POST "http://localhost:8000/api/v1/transcript/" \
      -H "Content-Type: application/json" \
      -d '{"youtube_url": "https://www.youtube.com/watch?v=VIDEO_ID"}'
 
 # 指定語言
-curl -X POST "http://localhost:7999/api/v1/transcript/" \
+curl -X POST "http://localhost:8000/api/v1/transcript/" \
      -H "Content-Type: application/json" \
      -d '{"youtube_url": "https://www.youtube.com/watch?v=VIDEO_ID", "language": "zh-TW"}'
 ```
@@ -145,7 +180,7 @@ curl -X POST "http://localhost:7999/api/v1/transcript/" \
 
 #### 2. 獲取純文字字幕
 ```bash
-curl -X POST "http://localhost:7999/api/v1/transcript/text" \
+curl -X POST "http://localhost:8000/api/v1/transcript/text" \
      -H "Content-Type: application/json" \
      -d '{"youtube_url": "https://www.youtube.com/watch?v=VIDEO_ID", "language": "zh-TW"}'
 ```
@@ -162,14 +197,14 @@ curl -X POST "http://localhost:7999/api/v1/transcript/text" \
 
 #### 3. 表單方式獲取字幕
 ```bash
-curl -X POST "http://localhost:7999/api/v1/transcript/form" \
+curl -X POST "http://localhost:8000/api/v1/transcript/form" \
      -F "youtube_url=https://www.youtube.com/watch?v=VIDEO_ID" \
      -F "language=zh-TW"
 ```
 
 #### 4. 查看可用字幕語言
 ```bash
-curl -X GET "http://localhost:7999/api/v1/transcript/languages/VIDEO_ID"
+curl -X GET "http://localhost:8000/api/v1/transcript/languages/VIDEO_ID"
 ```
 
 **回應範例：**
@@ -233,8 +268,8 @@ API 支援以下 YouTube 網址格式：
 
 啟動服務後，您可以訪問以下網址查看完整的 API 文檔：
 
-- **Swagger UI**：http://localhost:7999/docs
-- **ReDoc**：http://localhost:7999/redoc
+- **Swagger UI**：http://localhost:8000/docs
+- **ReDoc**：http://localhost:8000/redoc
 
 ## 實際測試範例
 
@@ -243,15 +278,15 @@ API 支援以下 YouTube 網址格式：
 ```bash
 # 測試影片：https://www.youtube.com/watch?v=kBCkijV4oKE
 # 1. 查看可用語言
-curl -s "http://localhost:7999/api/v1/transcript/languages/kBCkijV4oKE" | jq .
+curl -s "http://localhost:8000/api/v1/transcript/languages/kBCkijV4oKE" | jq .
 
 # 2. 獲取繁體中文字幕
-curl -s -X POST "http://localhost:7999/api/v1/transcript/" \
+curl -s -X POST "http://localhost:8000/api/v1/transcript/" \
      -H "Content-Type: application/json" \
      -d '{"youtube_url": "https://www.youtube.com/watch?v=kBCkijV4oKE", "language": "zh-TW"}' | jq .
 
 # 3. 獲取純文字格式
-curl -s -X POST "http://localhost:7999/api/v1/transcript/text" \
+curl -s -X POST "http://localhost:8000/api/v1/transcript/text" \
      -H "Content-Type: application/json" \
      -d '{"youtube_url": "https://www.youtube.com/watch?v=kBCkijV4oKE", "language": "zh-TW"}' | jq .
 ```

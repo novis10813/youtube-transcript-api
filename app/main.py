@@ -22,7 +22,8 @@ async def lifespan(app: FastAPI):
     """應用程式生命週期管理"""
     # 啟動時執行
     print(f"🚀 {settings.app_name} v{settings.app_version} 正在啟動...")
-    print(f"📝 API 文檔可在以下網址查看: http://localhost:8000/docs")
+    print(f"🌐 服務運行在: http://{settings.host}:{settings.port}")
+    print(f"📝 API 文檔可在以下網址查看: http://{settings.host}:{settings.port}/docs")
     yield
     # 關閉時執行
     print(f"👋 {settings.app_name} 正在關閉...")
@@ -98,4 +99,14 @@ async def get_version():
         "app_name": settings.app_name,
         "version": settings.app_version,
         "api_version": "v1"
-    } 
+    }
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "app.main:app",
+        host=settings.host,
+        port=settings.port,
+        reload=settings.debug
+    ) 

@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     app_version: str = "1.0.0"
     description: str = "使用 FastAPI 和 youtube_transcript_api 獲取 YouTube 影片的繁體中文字幕"
     
+    # 伺服器設定
+    host: str = "0.0.0.0"
+    port: int = 8000
+    
     # API 設定
     api_prefix: str = "/api/v1"
     debug: bool = False
