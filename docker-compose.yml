@@ -1,0 +1,26 @@
+services:
+  yt-transcript-api:
+    build: .
+    # 或者使用 Docker Hub 映像檔（替換為您的實際映像檔名稱）
+    # image: your-dockerhub-username/yt-transcript-api:latest
+    
+    container_name: yt-transcript-api
+    
+    ports:
+      - "${PORT:-8000}:${PORT:-8000}"
+    
+    environment:
+      # 伺服器設定
+      - HOST=${HOST:-0.0.0.0}
+      - PORT=${PORT:-8000}
+      # YouTube Transcript API 設定
+      - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE:-zh-Hant}
+      - FALLBACK_LANGUAGES=${FALLBACK_LANGUAGES:-zh-Hans,zh,en}
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${PORT:-8000}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
