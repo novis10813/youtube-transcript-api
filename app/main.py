@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 
 from .config import settings
-from .routers import transcript
+from .routers import transcript, video, channel, playlist
 from .exceptions import (
     YouTubeTranscriptError,
     youtube_transcript_exception_handler,
@@ -57,6 +57,24 @@ app.add_exception_handler(Exception, general_exception_handler)
 # 包含路由
 app.include_router(
     transcript.router,
+    prefix=settings.api_prefix,
+    responses={404: {"description": "Not found"}}
+)
+
+app.include_router(
+    video.router,
+    prefix=settings.api_prefix,
+    responses={404: {"description": "Not found"}}
+)
+
+app.include_router(
+    channel.router,
+    prefix=settings.api_prefix,
+    responses={404: {"description": "Not found"}}
+)
+
+app.include_router(
+    playlist.router,
     prefix=settings.api_prefix,
     responses={404: {"description": "Not found"}}
 )

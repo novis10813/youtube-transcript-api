@@ -15,6 +15,7 @@ dependencies = [
     "pydantic>=2.10.0",
     "pydantic-settings>=2.8.0",
     "pytubefix>=8.0.0",
+    "scrapetube>=2.5.0",
 ]
 
 [project.optional-dependencies]
