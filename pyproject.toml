@@ -1,6 +1,6 @@
 [project]
 name = "yt-transcript-api"
-version = "1.0.0"
+version = "1.1.0"
 description = "YouTube 字幕 API 服務 - 使用 FastAPI 和 youtube_transcript_api 獲取 YouTube 影片的繁體中文字幕"
 authors = [
     {name = "Your Name", email = "your.email@example.com"}
