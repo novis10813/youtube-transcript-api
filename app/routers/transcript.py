@@ -20,6 +20,7 @@ from ..exceptions import (
     TranscriptDisabledError,
     VideoNotFoundError
 )
+from ..services.video_info import get_video_info, generate_markdown
 
 # 建立路由器
 router = APIRouter(
@@ -34,6 +35,10 @@ class TranscriptRequest(BaseModel):
     """字幕請求模型"""
     youtube_url: str = Field(..., description="YouTube 影片網址")
     language: Optional[str] = Field(None, description="指定語言代碼 (例如: zh-Hant, en)")
+    include_chapters: bool = Field(
+        default=False,
+        description="是否包含章節標題（如有）。啟用時回傳 Markdown 格式，包含 H1（影片標題）和 H2（章節標題）"
+    )
 
 
 class TranscriptItem(BaseModel):
@@ -58,7 +63,9 @@ class TranscriptTextResponse(BaseModel):
     success: bool = Field(..., description="是否成功")
     video_id: str = Field(..., description="YouTube 影片 ID")
     language: str = Field(..., description="字幕語言")
-    text: str = Field(..., description="完整字幕文字")
+    text: str = Field(..., description="完整字幕文字（或包含章節的 Markdown 格式）")
+    title: Optional[str] = Field(None, description="影片標題（僅當 include_chapters=True 時）")
+    has_chapters: bool = Field(default=False, description="影片是否有章節")
 
 
 class AvailableLanguagesResponse(BaseModel):
@@ -160,6 +167,9 @@ async def get_transcript_text(
     
     - **youtube_url**: YouTube 影片網址
     - **language**: 可選的語言代碼，預設為繁體中文
+    - **include_chapters**: 是否包含章節標題（預設為 False）
+      - False: 回傳純文字字幕
+      - True: 回傳 Markdown 格式，包含 H1（影片標題）和 H2（章節標題，如有）
     """
     # 驗證並提取影片 ID
     video_id = validate_youtube_url(request.youtube_url)
@@ -173,14 +183,34 @@ async def get_transcript_text(
             video_id, target_language, settings.fallback_languages
         )
         
-        # 合併為純文字
-        full_text = " ".join(item['text'] for item in transcript_data)
+        # 預設值
+        title = None
+        has_chapters = False
+        
+        if request.include_chapters:
+            # 獲取影片資訊（標題和章節）
+            video_info = get_video_info(request.youtube_url)
+            title = video_info.get('title')
+            chapters = video_info.get('chapters', [])
+            has_chapters = len(chapters) > 0
+            
+            # 生成 Markdown 格式
+            full_text = generate_markdown(
+                title=title,
+                chapters=chapters,
+                transcript=transcript_data
+            )
+        else:
+            # 合併為純文字
+            full_text = " ".join(item['text'] for item in transcript_data)
         
         return TranscriptTextResponse(
             success=True,
             video_id=video_id,
             language=actual_language,
-            text=full_text
+            text=full_text,
+            title=title,
+            has_chapters=has_chapters
         )
         
     except TranscriptsDisabled:
