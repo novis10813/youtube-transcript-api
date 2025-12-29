@@ -41,7 +41,7 @@ curl "http://localhost:8000/api/v1/channel/UC0lbAQVpenvfA2QqzsRtL_g/videos?limit
     {
       "video_id": "abc123",
       "title": "影片標題",
-      "publish_date": "2024-12-29T08:00:00Z",
+      "publish_date": "1 day ago",
       "duration": 1800,
       "thumbnail_url": "https://i.ytimg.com/vi/abc123/default.jpg"
     }

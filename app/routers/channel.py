@@ -40,8 +40,19 @@ async def get_channel_videos(
             if not info:
                 continue
             
-            # TODO: 處理 since 時間篩選 (scrapetube 只回傳相對時間，需要更複雜的轉換)
-            # 目前僅作範例，實際轉換需要額外邏輯
+            # 處理 since 時間篩選
+            if since:
+                publish_time = service._parse_relative_time(info.get('publish_date'))
+                if publish_time:
+                    # 確保 since 對比的是 aware datetime (假設 parse 出來的是 native，這裡既然只是比較，簡單起見全部轉為 naive 或 aware)
+                    # _parse_relative_time 回傳的是 naive (datetime.now() - delta)
+                    
+                    # 處理時區問題：如果 since 有時區，轉為 naive UTC 或 local？
+                    # 簡單起見，比較 timestamp 或都轉 naive
+                    since_naive = since.replace(tzinfo=None)
+                    
+                    if publish_time < since_naive:
+                        continue
             
             videos.append(VideoItem(**info))
         

@@ -20,6 +20,48 @@ def _parse_duration(duration_text: str) -> Optional[int]:
         pass
     return None
 
+def _parse_relative_time(text: str) -> Optional[datetime]:
+    """
+    解析相對時間文字，例如 "1 day ago" 或 "1天前"
+    回傳推算的 datetime 物件
+    """
+    if not text:
+        return None
+        
+    now = datetime.now()
+    text = text.lower().replace(' ', '')
+    
+    try:
+        # 提取數字
+        import re
+        match = re.search(r'(\d+)', text)
+        if not match:
+            return None
+        number = int(match.group(1))
+        
+        # 判斷單位 (支援英文和繁體中文)
+        from datetime import timedelta
+        
+        if 'second' in text or '秒' in text:
+            return now - timedelta(seconds=number)
+        elif 'minute' in text or '分' in text:
+            return now - timedelta(minutes=number)
+        elif 'hour' in text or '時' in text:
+            return now - timedelta(hours=number)
+        elif 'day' in text or '天' in text or '日' in text:
+            return now - timedelta(days=number)
+        elif 'week' in text or '週' in text:
+            return now - timedelta(weeks=number)
+        elif 'month' in text or '月' in text:
+            return now - timedelta(days=number * 30) # 近似值
+        elif 'year' in text or '年' in text:
+            return now - timedelta(days=number * 365) # 近似值
+            
+    except Exception:
+        pass
+        
+    return None
+
 def _parse_view_count(view_text: str) -> Optional[int]:
     """解析觀看次數文字"""
     if not view_text:
