@@ -4,8 +4,20 @@
 """
 
 from pytubefix import YouTube
-from typing import Optional
+from typing import Optional, Any, Dict
 import re
+
+
+def _to_dict(item: Any) -> Dict[str, Any]:
+    """Convert transcript item to dict (handles FetchedTranscriptSnippet objects)"""
+    if isinstance(item, dict):
+        return item
+    return {
+        "text": getattr(item, 'text', ''),
+        "start": getattr(item, 'start', 0),
+        "duration": getattr(item, 'duration', 0)
+    }
+
 
 
 def extract_video_id(url: str) -> str:
@@ -83,7 +95,8 @@ def assign_transcript_to_chapters(
     result = {chapter['title']: [] for chapter in sorted_chapters}
     
     for snippet in transcript:
-        snippet_start = snippet['start']
+        item = _to_dict(snippet)
+        snippet_start = item['start']
         
         # 找出這個字幕段落屬於哪個章節
         chapter_title = sorted_chapters[0]['title']
@@ -93,7 +106,7 @@ def assign_transcript_to_chapters(
             else:
                 break
         
-        result[chapter_title].append(snippet)
+        result[chapter_title].append(item)
     
     return result
 
@@ -133,13 +146,13 @@ def generate_markdown(
                 lines.append("")
                 
                 # 合併字幕文字
-                text_parts = [snippet['text'] for snippet in chapter_snippets]
+                text_parts = [_to_dict(snippet)['text'] for snippet in chapter_snippets]
                 combined_text = ' '.join(text_parts)
                 lines.append(combined_text)
                 lines.append("")
     else:
         # 沒有章節，輸出所有字幕文字
-        text_parts = [snippet['text'] for snippet in transcript]
+        text_parts = [_to_dict(snippet)['text'] for snippet in transcript]
         combined_text = ' '.join(text_parts)
         lines.append(combined_text)
         lines.append("")

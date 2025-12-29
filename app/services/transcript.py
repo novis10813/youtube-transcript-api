@@ -14,36 +14,45 @@ from ..exceptions import (
 )
 from .video import get_video_info, generate_markdown
 
+# Create API instance for the new API style
+_api = YouTubeTranscriptApi()
+
 def get_transcript_with_fallback(video_id: str, preferred_language: str, fallback_languages: List[str]) -> Tuple[List[Dict[str, Any]], str]:
     """
     嘗試獲取字幕，包含語言回退機制
     """
     languages_to_try = [preferred_language] + fallback_languages
     
-    for language in languages_to_try:
-        try:
-            transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=[language])
-            return transcript, language
-        except NoTranscriptFound:
-            continue
-    
-    # 如果指定語言都找不到，嘗試獲取任何可用的字幕
     try:
-        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+        transcript_list = _api.list(video_id)
+        # Convert to list first to avoid iterator exhaustion
         available_transcripts = list(transcript_list)
+        
+        # Try preferred languages first
+        for language in languages_to_try:
+            for transcript in available_transcripts:
+                if transcript.language_code == language:
+                    return transcript.fetch(), language
+        
+        # If none of the preferred languages found, use the first available
         if available_transcripts:
             first_transcript = available_transcripts[0]
-            transcript = first_transcript.fetch()
-            return transcript, first_transcript.language_code
+            return first_transcript.fetch(), first_transcript.language_code
+            
+    except TranscriptsDisabled:
+        raise TranscriptDisabledError(video_id)
+    except VideoUnavailable:
+        raise VideoNotFoundError(video_id)
     except Exception:
         pass
     
     raise TranscriptNotFoundError(video_id, preferred_language)
 
+
 def get_available_languages(video_id: str) -> List[Dict[str, Any]]:
     """獲取可用語言"""
     try:
-        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+        transcript_list = _api.list(video_id)
         
         languages = []
         for transcript in transcript_list:
@@ -61,20 +70,25 @@ def get_available_languages(video_id: str) -> List[Dict[str, Any]]:
     except Exception as e:
         raise e
 
-def process_transcript_data(transcript_data: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], float]:
+
+def _to_dict(item) -> Dict[str, Any]:
+    """Convert transcript item to dict (handles FetchedTranscriptSnippet objects)"""
+    if isinstance(item, dict):
+        return item
+    # FetchedTranscriptSnippet has .text, .start, .duration attributes
+    return {
+        "text": getattr(item, 'text', ''),
+        "start": getattr(item, 'start', 0),
+        "duration": getattr(item, 'duration', 0)
+    }
+
+def process_transcript_data(transcript_data: List[Any]) -> Tuple[List[Dict[str, Any]], float]:
     """處理原始字幕資料，回傳處理後的項目列表和總時長"""
-    transcript_items = [
-        {
-            "text": item['text'],
-            "start": item['start'],
-            "duration": item['duration']
-        }
-        for item in transcript_data
-    ]
+    transcript_items = [_to_dict(item) for item in transcript_data]
     
     total_duration = max(
-        item['start'] + item['duration'] for item in transcript_data
-    ) if transcript_data else 0
+        item['start'] + item['duration'] for item in transcript_items
+    ) if transcript_items else 0
     
     return transcript_items, total_duration
 
@@ -109,6 +123,6 @@ def generate_text_output(
         )
     else:
         # 合併為純文字
-        full_text = " ".join(item['text'] for item in transcript_data)
+        full_text = " ".join(_to_dict(item)['text'] for item in transcript_data)
         
     return full_text, title, has_chapters

@@ -18,6 +18,8 @@ from ..exceptions import (
     TranscriptDisabledError,
     VideoNotFoundError
 )
+from youtube_transcript_api import TranscriptsDisabled, VideoUnavailable
+
 
 # 建立路由器
 router = APIRouter(

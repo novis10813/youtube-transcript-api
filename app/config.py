@@ -3,7 +3,7 @@
 管理環境變數和應用程式設定
 """
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
 import os
 
@@ -41,10 +41,12 @@ class Settings(BaseSettings):
             return [lang.strip() for lang in fallback_env.split(',') if lang.strip()]
         return ["zh-Hans", "zh", "en"]  # 預設值
     
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8"
+    )
 
 
 # 建立全域設定實例
-settings = Settings() 
+settings = Settings()
+ 

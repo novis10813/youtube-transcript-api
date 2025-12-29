@@ -88,9 +88,17 @@ def _parse_view_count(view_text: str) -> Optional[int]:
         pass
     return None
 
-def get_channel_videos_generator(channel_id: str, limit: int = 20) -> Any:
-    """獲取頻道影片生成器"""
-    return scrapetube.get_channel(channel_id, limit=limit)
+def get_channel_videos_generator(channel_id: str, limit: int = 20, content_type: str = "videos") -> Any:
+    """
+    獲取頻道影片生成器
+    
+    Args:
+        channel_id: 頻道 ID
+        limit: 回傳數量上限
+        content_type: 內容類型 (videos, shorts, streams)
+    """
+    return scrapetube.get_channel(channel_id, limit=limit, content_type=content_type)
+
 
 def extract_video_info(video_data: dict) -> dict:
     """從 scrapetube 數據中提取影片資訊"""

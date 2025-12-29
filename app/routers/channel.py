@@ -17,7 +17,8 @@ router = APIRouter(
 async def get_channel_videos(
     channel_id: str,
     since: Optional[datetime] = Query(None, description="只回傳此時間之後發佈的影片 (ISO 8601)"),
-    limit: int = Query(20, ge=1, le=100, description="回傳數量上限")
+    limit: int = Query(20, ge=1, le=100, description="回傳數量上限"),
+    content_type: str = Query("videos", description="內容類型 (videos, shorts, streams)")
 ):
     """
     獲取頻道影片列表
@@ -25,12 +26,21 @@ async def get_channel_videos(
     - **channel_id**: 頻道 ID（以 UC 開頭）
     - **since**: 只回傳此時間之後發佈的影片
     - **limit**: 回傳數量上限（預設 20，最大 100）
+    - **content_type**: 內容類型（videos, shorts, streams）
     """
+    # Validate content_type
+    valid_types = ["videos", "shorts", "streams"]
+    if content_type not in valid_types:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"無效的 content_type: {content_type}，有效值為: {valid_types}"
+        )
+    
     try:
         videos = []
         
         # 獲取生成器，多抓一些以便過濾
-        video_generator = service.get_channel_videos_generator(channel_id, limit=limit * 2)
+        video_generator = service.get_channel_videos_generator(channel_id, limit=limit * 2, content_type=content_type)
         
         for video_data in video_generator:
             if len(videos) >= limit:
@@ -68,6 +78,7 @@ async def get_channel_videos(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"獲取頻道影片時發生錯誤: {str(e)}"
         )
+
 
 
 @router.get("/{channel_id}/info", response_model=ChannelInfoResponse)
