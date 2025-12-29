@@ -1,26 +1,23 @@
-"""
-YouTube 字幕 API 路由模組
-處理與 YouTube 字幕相關的 API 端點
-"""
+"""YouTube 字幕 API 路由模組"""
 
 from fastapi import APIRouter, Depends, HTTPException, Form, status
-from pydantic import BaseModel, Field
-from typing import List, Dict, Any, Optional
-from youtube_transcript_api import YouTubeTranscriptApi
-from youtube_transcript_api._errors import (
-    TranscriptsDisabled,
-    NoTranscriptFound,
-    VideoUnavailable
-)
+from typing import Optional
 
 from ..config import Settings
 from ..dependencies import validate_youtube_url, get_settings
+from ..schemas.transcript import (
+    TranscriptRequest, 
+    TranscriptResponse, 
+    TranscriptTextResponse,
+    AvailableLanguagesResponse,
+    TranscriptItem
+)
+from ..services import transcript as service
 from ..exceptions import (
     TranscriptNotFoundError,
     TranscriptDisabledError,
     VideoNotFoundError
 )
-from ..services.video_info import get_video_info, generate_markdown
 
 # 建立路由器
 router = APIRouter(
@@ -28,78 +25,6 @@ router = APIRouter(
     tags=["字幕"],
     responses={404: {"description": "字幕不存在"}}
 )
-
-
-# Pydantic 模型定義
-class TranscriptRequest(BaseModel):
-    """字幕請求模型"""
-    youtube_url: str = Field(..., description="YouTube 影片網址")
-    language: Optional[str] = Field(None, description="指定語言代碼 (例如: zh-Hant, en)")
-    include_chapters: bool = Field(
-        default=False,
-        description="是否包含章節標題（如有）。啟用時回傳 Markdown 格式，包含 H1（影片標題）和 H2（章節標題）"
-    )
-
-
-class TranscriptItem(BaseModel):
-    """字幕項目模型"""
-    text: str = Field(..., description="字幕文字")
-    start: float = Field(..., description="開始時間（秒）")
-    duration: float = Field(..., description="持續時間（秒）")
-
-
-class TranscriptResponse(BaseModel):
-    """字幕回應模型"""
-    success: bool = Field(..., description="是否成功")
-    video_id: str = Field(..., description="YouTube 影片 ID")
-    language: str = Field(..., description="字幕語言")
-    transcript: List[TranscriptItem] = Field(..., description="字幕內容")
-    total_items: int = Field(..., description="字幕項目總數")
-    duration: float = Field(..., description="影片總長度（秒）")
-
-
-class TranscriptTextResponse(BaseModel):
-    """純文字字幕回應模型"""
-    success: bool = Field(..., description="是否成功")
-    video_id: str = Field(..., description="YouTube 影片 ID")
-    language: str = Field(..., description="字幕語言")
-    text: str = Field(..., description="完整字幕文字（或包含章節的 Markdown 格式）")
-    title: Optional[str] = Field(None, description="影片標題（僅當 include_chapters=True 時）")
-    has_chapters: bool = Field(default=False, description="影片是否有章節")
-
-
-class AvailableLanguagesResponse(BaseModel):
-    """可用語言回應模型"""
-    success: bool = Field(..., description="是否成功")
-    video_id: str = Field(..., description="YouTube 影片 ID")
-    languages: List[Dict[str, Any]] = Field(..., description="可用語言列表")
-
-
-def get_transcript_with_fallback(video_id: str, preferred_language: str, fallback_languages: List[str]):
-    """
-    嘗試獲取字幕，包含語言回退機制
-    """
-    languages_to_try = [preferred_language] + fallback_languages
-    
-    for language in languages_to_try:
-        try:
-            transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=[language])
-            return transcript, language
-        except NoTranscriptFound:
-            continue
-    
-    # 如果指定語言都找不到，嘗試獲取任何可用的字幕
-    try:
-        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-        available_transcripts = list(transcript_list)
-        if available_transcripts:
-            first_transcript = available_transcripts[0]
-            transcript = first_transcript.fetch()
-            return transcript, first_transcript.language_code
-    except Exception:
-        pass
-    
-    raise TranscriptNotFoundError(video_id, preferred_language)
 
 
 @router.post("/", response_model=TranscriptResponse)
@@ -121,39 +46,27 @@ async def get_transcript(
     
     try:
         # 獲取字幕
-        transcript_data, actual_language = get_transcript_with_fallback(
+        transcript_data, actual_language = service.get_transcript_with_fallback(
             video_id, target_language, settings.fallback_languages
         )
         
-        # 轉換為回應格式
-        transcript_items = [
-            TranscriptItem(
-                text=item['text'],
-                start=item['start'],
-                duration=item['duration']
-            )
-            for item in transcript_data
-        ]
-        
-        # 計算總時長
-        total_duration = max(
-            item['start'] + item['duration'] for item in transcript_data
-        ) if transcript_data else 0
+        # 處理資料
+        transcript_items, total_duration = service.process_transcript_data(transcript_data)
         
         return TranscriptResponse(
             success=True,
             video_id=video_id,
             language=actual_language,
-            transcript=transcript_items,
+            transcript=[TranscriptItem(**item) for item in transcript_items],
             total_items=len(transcript_items),
             duration=total_duration
         )
         
-    except TranscriptsDisabled:
+    except (TranscriptsDisabled, TranscriptDisabledError):
         raise TranscriptDisabledError(video_id)
-    except VideoUnavailable:
+    except (VideoUnavailable, VideoNotFoundError):
         raise VideoNotFoundError(video_id)
-    except NoTranscriptFound:
+    except (service.NoTranscriptFound, TranscriptNotFoundError):
         raise TranscriptNotFoundError(video_id, target_language)
 
 
@@ -167,9 +80,7 @@ async def get_transcript_text(
     
     - **youtube_url**: YouTube 影片網址
     - **language**: 可選的語言代碼，預設為繁體中文
-    - **include_chapters**: 是否包含章節標題（預設為 False）
-      - False: 回傳純文字字幕
-      - True: 回傳 Markdown 格式，包含 H1（影片標題）和 H2（章節標題，如有）
+    - **include_chapters**: 是否包含章節標題
     """
     # 驗證並提取影片 ID
     video_id = validate_youtube_url(request.youtube_url)
@@ -179,30 +90,16 @@ async def get_transcript_text(
     
     try:
         # 獲取字幕
-        transcript_data, actual_language = get_transcript_with_fallback(
+        transcript_data, actual_language = service.get_transcript_with_fallback(
             video_id, target_language, settings.fallback_languages
         )
         
-        # 預設值
-        title = None
-        has_chapters = False
-        
-        if request.include_chapters:
-            # 獲取影片資訊（標題和章節）
-            video_info = get_video_info(request.youtube_url)
-            title = video_info.get('title')
-            chapters = video_info.get('chapters', [])
-            has_chapters = len(chapters) > 0
-            
-            # 生成 Markdown 格式
-            full_text = generate_markdown(
-                title=title,
-                chapters=chapters,
-                transcript=transcript_data
-            )
-        else:
-            # 合併為純文字
-            full_text = " ".join(item['text'] for item in transcript_data)
+        # 生成輸出
+        full_text, title, has_chapters = service.generate_text_output(
+            transcript_data, 
+            request.youtube_url, 
+            request.include_chapters
+        )
         
         return TranscriptTextResponse(
             success=True,
@@ -213,11 +110,11 @@ async def get_transcript_text(
             has_chapters=has_chapters
         )
         
-    except TranscriptsDisabled:
+    except (TranscriptsDisabled, TranscriptDisabledError):
         raise TranscriptDisabledError(video_id)
-    except VideoUnavailable:
+    except (VideoUnavailable, VideoNotFoundError):
         raise VideoNotFoundError(video_id)
-    except NoTranscriptFound:
+    except (service.NoTranscriptFound, TranscriptNotFoundError):
         raise TranscriptNotFoundError(video_id, target_language)
 
 
@@ -244,16 +141,7 @@ async def get_available_languages(video_id: str):
     - **video_id**: YouTube 影片 ID
     """
     try:
-        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-        
-        languages = []
-        for transcript in transcript_list:
-            languages.append({
-                "code": transcript.language_code,
-                "name": transcript.language,
-                "is_generated": transcript.is_generated,
-                "is_translatable": transcript.is_translatable
-            })
+        languages = service.get_available_languages(video_id)
         
         return AvailableLanguagesResponse(
             success=True,
@@ -261,12 +149,10 @@ async def get_available_languages(video_id: str):
             languages=languages
         )
         
-    except TranscriptsDisabled:
-        raise TranscriptDisabledError(video_id)
-    except VideoUnavailable:
-        raise VideoNotFoundError(video_id)
     except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"獲取可用語言時發生錯誤: {str(e)}"
-        ) 
+        )
