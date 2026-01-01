@@ -1,74 +1,96 @@
-"""字幕服務模組"""
+"""字幕服務模組
+
+使用 yt-dlp 獲取 YouTube 字幕，替代原本的 youtube-transcript-api。
+yt-dlp 內建模擬瀏覽器行為，較不易被 YouTube 封鎖。
+"""
 
 from typing import List, Tuple, Any, Dict
-from youtube_transcript_api import YouTubeTranscriptApi
-from youtube_transcript_api._errors import (
-    TranscriptsDisabled,
-    NoTranscriptFound,
-    VideoUnavailable
-)
 from ..exceptions import (
     TranscriptNotFoundError,
     TranscriptDisabledError,
     VideoNotFoundError
 )
 from .video import get_video_info, generate_markdown
+from .yt_dlp_wrapper import get_wrapper, YtDlpWrapper
+import logging
 
-# Create API instance for the new API style
-_api = YouTubeTranscriptApi()
+logger = logging.getLogger(__name__)
 
-def get_transcript_with_fallback(video_id: str, preferred_language: str, fallback_languages: List[str]) -> Tuple[List[Dict[str, Any]], str]:
+# 獲取 yt-dlp wrapper 實例
+_wrapper: YtDlpWrapper = None
+
+
+def _get_wrapper() -> YtDlpWrapper:
+    """獲取 YtDlpWrapper 實例"""
+    global _wrapper
+    if _wrapper is None:
+        _wrapper = get_wrapper()
+    return _wrapper
+
+
+def get_transcript_with_fallback(
+    video_id: str, 
+    preferred_language: str, 
+    fallback_languages: List[str]
+) -> Tuple[List[Dict[str, Any]], str]:
     """
     嘗試獲取字幕，包含語言回退機制
+    
+    Args:
+        video_id: YouTube 影片 ID
+        preferred_language: 偏好語言代碼
+        fallback_languages: 回退語言代碼列表
+        
+    Returns:
+        (字幕列表, 實際使用的語言代碼)
     """
-    languages_to_try = [preferred_language] + fallback_languages
+    wrapper = _get_wrapper()
     
     try:
-        transcript_list = _api.list(video_id)
-        # Convert to list first to avoid iterator exhaustion
-        available_transcripts = list(transcript_list)
+        transcript_data, actual_language = wrapper.get_subtitles(
+            video_id, preferred_language, fallback_languages
+        )
+        return transcript_data, actual_language
         
-        # Try preferred languages first
-        for language in languages_to_try:
-            for transcript in available_transcripts:
-                if transcript.language_code == language:
-                    return transcript.fetch(), language
+    except Exception as e:
+        error_msg = str(e).lower()
         
-        # If none of the preferred languages found, use the first available
-        if available_transcripts:
-            first_transcript = available_transcripts[0]
-            return first_transcript.fetch(), first_transcript.language_code
-            
-    except TranscriptsDisabled:
-        raise TranscriptDisabledError(video_id)
-    except VideoUnavailable:
-        raise VideoNotFoundError(video_id)
-    except Exception:
-        pass
-    
-    raise TranscriptNotFoundError(video_id, preferred_language)
+        # 根據錯誤訊息分類
+        if 'private' in error_msg or 'unavailable' in error_msg:
+            raise VideoNotFoundError(video_id)
+        elif 'no subtitles' in error_msg or 'no subtitle' in error_msg:
+            raise TranscriptNotFoundError(video_id, preferred_language)
+        elif 'disabled' in error_msg:
+            raise TranscriptDisabledError(video_id)
+        else:
+            logger.error(f"Failed to get transcript for {video_id}: {e}")
+            raise TranscriptNotFoundError(video_id, preferred_language)
 
 
 def get_available_languages(video_id: str) -> List[Dict[str, Any]]:
-    """獲取可用語言"""
-    try:
-        transcript_list = _api.list(video_id)
+    """
+    獲取可用字幕語言
+    
+    Args:
+        video_id: YouTube 影片 ID
         
-        languages = []
-        for transcript in transcript_list:
-            languages.append({
-                "code": transcript.language_code,
-                "name": transcript.language,
-                "is_generated": transcript.is_generated,
-                "is_translatable": transcript.is_translatable
-            })
-        return languages
-    except TranscriptsDisabled:
-        raise TranscriptDisabledError(video_id)
-    except VideoUnavailable:
-        raise VideoNotFoundError(video_id)
+    Returns:
+        語言列表，每個包含 code, name, is_generated, is_translatable
+    """
+    wrapper = _get_wrapper()
+    
+    try:
+        return wrapper.list_available_subtitles(video_id)
     except Exception as e:
-        raise e
+        error_msg = str(e).lower()
+        
+        if 'private' in error_msg or 'unavailable' in error_msg:
+            raise VideoNotFoundError(video_id)
+        elif 'disabled' in error_msg:
+            raise TranscriptDisabledError(video_id)
+        else:
+            logger.error(f"Failed to list languages for {video_id}: {e}")
+            raise
 
 
 def _to_dict(item) -> Dict[str, Any]:
@@ -82,6 +104,7 @@ def _to_dict(item) -> Dict[str, Any]:
         "duration": getattr(item, 'duration', 0)
     }
 
+
 def process_transcript_data(transcript_data: List[Any]) -> Tuple[List[Dict[str, Any]], float]:
     """處理原始字幕資料，回傳處理後的項目列表和總時長"""
     transcript_items = [_to_dict(item) for item in transcript_data]
@@ -91,6 +114,7 @@ def process_transcript_data(transcript_data: List[Any]) -> Tuple[List[Dict[str, 
     ) if transcript_items else 0
     
     return transcript_items, total_duration
+
 
 def generate_text_output(
     transcript_data: List[Dict[str, Any]], 

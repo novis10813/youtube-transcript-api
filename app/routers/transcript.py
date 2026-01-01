@@ -18,7 +18,6 @@ from ..exceptions import (
     TranscriptDisabledError,
     VideoNotFoundError
 )
-from youtube_transcript_api import TranscriptsDisabled, VideoUnavailable
 
 
 # 建立路由器
@@ -64,12 +63,12 @@ async def get_transcript(
             duration=total_duration
         )
         
-    except (TranscriptsDisabled, TranscriptDisabledError):
-        raise TranscriptDisabledError(video_id)
-    except (VideoUnavailable, VideoNotFoundError):
-        raise VideoNotFoundError(video_id)
-    except (service.NoTranscriptFound, TranscriptNotFoundError):
-        raise TranscriptNotFoundError(video_id, target_language)
+    except TranscriptDisabledError:
+        raise
+    except VideoNotFoundError:
+        raise
+    except TranscriptNotFoundError:
+        raise
 
 
 @router.post("/text", response_model=TranscriptTextResponse)
@@ -112,12 +111,12 @@ async def get_transcript_text(
             has_chapters=has_chapters
         )
         
-    except (TranscriptsDisabled, TranscriptDisabledError):
-        raise TranscriptDisabledError(video_id)
-    except (VideoUnavailable, VideoNotFoundError):
-        raise VideoNotFoundError(video_id)
-    except (service.NoTranscriptFound, TranscriptNotFoundError):
-        raise TranscriptNotFoundError(video_id, target_language)
+    except TranscriptDisabledError:
+        raise
+    except VideoNotFoundError:
+        raise
+    except TranscriptNotFoundError:
+        raise
 
 
 @router.post("/form", response_model=TranscriptResponse)
