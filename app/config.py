@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     # YouTube Transcript API 設定
     default_language: str = "zh-Hant"  # 繁體中文
     
+    # Whisper Transcribe API 設定 (fallback)
+    transcribe_api_url: str | None = "http://192.168.0.160:8001"
+    
     @property
     def fallback_languages(self) -> List[str]:
         """獲取備用語言列表，支援環境變數覆蓋"""

@@ -12,6 +12,8 @@ from ..exceptions import (
 )
 from .video import get_video_info, generate_markdown
 from .yt_dlp_wrapper import get_wrapper, YtDlpWrapper
+from .transcribe_client import transcribe_video
+from ..config import settings
 import logging
 
 logger = logging.getLogger(__name__)
@@ -28,7 +30,7 @@ def _get_wrapper() -> YtDlpWrapper:
     return _wrapper
 
 
-def get_transcript_with_fallback(
+async def get_transcript_with_fallback(
     video_id: str, 
     preferred_language: str, 
     fallback_languages: List[str]
@@ -53,6 +55,27 @@ def get_transcript_with_fallback(
         return transcript_data, actual_language
         
     except Exception as e:
+        # 嘗試使用 fallback API
+        if settings.transcribe_api_url:
+            try:
+                logger.info(f"yt-dlp failed ({e}), trying Whisper fallback for {video_id}")
+                
+                # 嘗試從 yt-dlp 獲取影片語言資訊
+                detected_language = preferred_language  # 預設使用 preferred_language
+                try:
+                    video_info = wrapper.get_video_info(video_id)
+                    detected_language = video_info.get('language') or preferred_language
+                    logger.info(f"Detected video language: {detected_language}")
+                except Exception as info_error:
+                    logger.warning(f"Could not get video info for language detection: {info_error}")
+                
+                # 使用偵測到的語言呼叫 Whisper API
+                transcript_data = await transcribe_video(video_id, detected_language)
+                return transcript_data, detected_language
+            except Exception as fallback_error:
+                logger.error(f"Fallback also failed: {fallback_error}")
+                # 繼續拋出原始錯誤，讓後續邏輯處理
+        
         error_msg = str(e).lower()
         
         # 根據錯誤訊息分類

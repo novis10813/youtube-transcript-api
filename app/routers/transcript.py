@@ -47,7 +47,7 @@ async def get_transcript(
     
     try:
         # 獲取字幕
-        transcript_data, actual_language = service.get_transcript_with_fallback(
+        transcript_data, actual_language = await service.get_transcript_with_fallback(
             video_id, target_language, settings.fallback_languages
         )
         
@@ -91,7 +91,7 @@ async def get_transcript_text(
     
     try:
         # 獲取字幕
-        transcript_data, actual_language = service.get_transcript_with_fallback(
+        transcript_data, actual_language = await service.get_transcript_with_fallback(
             video_id, target_language, settings.fallback_languages
         )
         
